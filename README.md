@@ -85,6 +85,24 @@ exif_editor/
 
 The extension spawns a subprocess for the editor dialog so it never blocks Nemo's main loop. Communication with exiftool uses JSON output (`exiftool -json -a`) for reads and direct flag arguments for writes (`exiftool -overwrite_original_in_place`).
 
+## Network / GVFS mounts (SMB, NFS, etc.)
+
+The plugin works on GVFS-mounted network shares (SMB/SFTP/etc.), but writes use a copy-to-temp-edit-copy-back strategy because exiftool cannot write directly to GVFS-FUSE mounts. Each file is transferred over the network twice (once to read, once to write back).
+
+**Per-file overhead:**
+- Network: 2x file size (1 read + 1 write)
+- Temp disk: ~2x file size peak, cleaned between files
+- RAM: ~2x file size peak (original + modified held briefly)
+
+| Files | Avg size | Network | Time (50 MB/s) |
+|---|---|---|---|
+| 36 | 4.5 MB (JPEG) | 324 MB | ~21 s |
+| 2,000 | 4.5 MB (JPEG) | 17.6 GB | ~10 min |
+| 36 | 50 MB (RAW) | 3.6 GB | ~2.4 min |
+| 2,000 | 50 MB (RAW) | 200 GB | ~2.2 hours |
+
+For local files, writes are in-place with no overhead. To avoid network overhead on large batches, consider editing files locally first, then copying them to the share.
+
 ## Uninstall
 
 ```bash

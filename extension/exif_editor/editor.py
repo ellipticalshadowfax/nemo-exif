@@ -391,6 +391,15 @@ class ExifEditorDialog(Gtk.Dialog):
         self.status_label.set_xalign(0)
         box.pack_start(self.status_label, False, False, 2)
 
+        self.progress_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        self.progress_bar = Gtk.ProgressBar()
+        self.progress_label = Gtk.Label()
+        self.progress_label.set_xalign(0)
+        self.progress_box.pack_start(self.progress_label, False, False, 0)
+        self.progress_box.pack_start(self.progress_bar, False, False, 0)
+        self.progress_box.set_no_show_all(True)
+        box.pack_start(self.progress_box, False, False, 2)
+
     def _load_values(self):
         tags = exif_lib.visible_tags(self.fields)
         first_data = exif_lib.read_exif(self.filepaths[0], tags)
@@ -481,10 +490,33 @@ class ExifEditorDialog(Gtk.Dialog):
             non_empty = {fid: val for fid, val in diff.items() if val}
             if not non_empty:
                 return False
-            exif_lib.write_exif_batch(self.filepaths, non_empty, self.fields, clear_all=True)
+            diff = non_empty
         else:
             if not diff:
                 return False
-            exif_lib.write_exif_batch(self.filepaths, diff, self.fields, clear_all=False)
+
+        if len(self.filepaths) > 1:
+            self.progress_box.show_all()
+            self.progress_label.set_text(f"Writing 0/{len(self.filepaths)} files\u2026")
+            self.progress_bar.set_fraction(0.0)
+
+        def _on_progress(current, total, filepath):
+            if total > 1:
+                name = filepath.split("/")[-1] if filepath else ""
+                self.progress_label.set_text(
+                    f"Writing {current}/{total}: {name}\u2026" if current < total
+                    else f"Done \u2014 {total} files written"
+                )
+                self.progress_bar.set_fraction(current / total if total else 1.0)
+            while Gtk.events_pending():
+                Gtk.main_iteration()
+
+        exif_lib.write_exif_batch(
+            self.filepaths, diff, self.fields,
+            clear_all=clear_all, progress_cb=_on_progress,
+        )
+
+        if len(self.filepaths) > 1:
+            self.progress_box.hide()
 
         return True

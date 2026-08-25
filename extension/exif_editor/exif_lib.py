@@ -150,10 +150,14 @@ def write_exif(filepath, diff, fields, clear_all=False):
         _run(args)
 
 
-def write_exif_batch(filepaths, diff, fields, clear_all=False):
-    fmap = fields_map(fields)
-    for fp in filepaths:
+def write_exif_batch(filepaths, diff, fields, clear_all=False, progress_cb=None):
+    total = len(filepaths)
+    for i, fp in enumerate(filepaths):
+        if progress_cb:
+            progress_cb(i, total, fp)
         write_exif(fp, diff, fields, clear_all=clear_all)
+    if progress_cb:
+        progress_cb(total, total, "")
 
 
 def can_edit(filepath):
