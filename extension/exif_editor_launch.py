@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import sys
 import os
+import traceback
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -18,15 +19,27 @@ def main():
 
     filepaths = sys.argv[1:]
 
-    dlg = ExifEditorDialog(filepaths)
-    resp = dlg.run()
+    try:
+        dlg = ExifEditorDialog(filepaths)
+        resp = dlg.run()
 
-    if resp == Gtk.ResponseType.OK:
-        saved = dlg.apply()
-        if saved:
-            pass
+        if resp == Gtk.ResponseType.OK:
+            saved = dlg.apply()
+            if saved:
+                pass
 
-    dlg.destroy()
+        dlg.destroy()
+    except Exception as e:
+        tb = traceback.format_exc()
+        dlg = Gtk.MessageDialog(
+            message_type=Gtk.MessageType.ERROR,
+            buttons=Gtk.ButtonsType.CLOSE,
+            text="EXIF Editor Error",
+        )
+        dlg.format_secondary_text(str(e))
+        dlg.run()
+        dlg.destroy()
+        print(tb, file=sys.stderr)
 
 
 if __name__ == "__main__":

@@ -3,6 +3,7 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
 
 CONFIG_DIR = os.path.expanduser("~/.config/exif-editor")
 CONFIG_PATH = os.path.join(CONFIG_DIR, "fields.json")
@@ -42,6 +43,29 @@ def _run(args):
     if result.returncode != 0:
         raise RuntimeError(result.stderr.strip() or "exiftool failed")
     return result.stdout
+
+
+def _is_gvfs_path(filepath):
+    return filepath.startswith("/run/user/") and "/gvfs/" in filepath
+
+
+def _gvfs_safe_write(filepath, exiftool_args):
+    tmp_dir = tempfile.mkdtemp(prefix="exif_editor_")
+    try:
+        basename = os.path.basename(filepath)
+        tmp_file = os.path.join(tmp_dir, basename)
+        with open(filepath, "rb") as fsrc:
+            data = fsrc.read()
+        with open(tmp_file, "wb") as fdst:
+            fdst.write(data)
+        args = exiftool_args + [tmp_file]
+        _run(args)
+        with open(tmp_file, "rb") as fsrc:
+            data = fsrc.read()
+        with open(filepath, "wb") as fdst:
+            fdst.write(data)
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 def read_exif(filepath, tags):
@@ -107,8 +131,11 @@ def write_exif(filepath, diff, fields, clear_all=False):
         else:
             args.append(f"-{tag}=")
 
-    args.append(filepath)
-    _run(args)
+    if _is_gvfs_path(filepath):
+        _gvfs_safe_write(filepath, args)
+    else:
+        args.append(filepath)
+        _run(args)
 
 
 def write_exif_batch(filepaths, diff, fields, clear_all=False):
