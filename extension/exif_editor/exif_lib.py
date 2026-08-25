@@ -51,19 +51,31 @@ def _is_gvfs_path(filepath):
 
 def _gvfs_safe_write(filepath, exiftool_args):
     tmp_dir = tempfile.mkdtemp(prefix="exif_editor_")
+    backup_file = None
     try:
         basename = os.path.basename(filepath)
         tmp_file = os.path.join(tmp_dir, basename)
-        with open(filepath, "rb") as fsrc:
-            data = fsrc.read()
-        with open(tmp_file, "wb") as fdst:
-            fdst.write(data)
+        with open(filepath, "rb") as f:
+            original_data = f.read()
+        backup_file = os.path.join(tmp_dir, basename + ".backup")
+        with open(backup_file, "wb") as f:
+            f.write(original_data)
+        with open(tmp_file, "wb") as f:
+            f.write(original_data)
         args = exiftool_args + [tmp_file]
         _run(args)
-        with open(tmp_file, "rb") as fsrc:
-            data = fsrc.read()
-        with open(filepath, "wb") as fdst:
-            fdst.write(data)
+        with open(tmp_file, "rb") as f:
+            new_data = f.read()
+        with open(filepath, "wb") as f:
+            f.write(new_data)
+        backup_file = None
+    except Exception:
+        if backup_file and os.path.exists(backup_file):
+            with open(backup_file, "rb") as f:
+                original_data = f.read()
+            with open(filepath, "wb") as f:
+                f.write(original_data)
+        raise
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
