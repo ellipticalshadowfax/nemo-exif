@@ -1,11 +1,13 @@
 import json
 import os
+import re
 import shutil
 import subprocess
 
 CONFIG_DIR = os.path.expanduser("~/.config/exif-editor")
 CONFIG_PATH = os.path.join(CONFIG_DIR, "fields.json")
 SEED_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "fields.json")
+TAG_CACHE_PATH = os.path.join(CONFIG_DIR, "all_tags.json")
 
 
 def _config_dir():
@@ -126,3 +128,39 @@ _SUPPORTED_EXTENSIONS = {
     ".cr2", ".cr3", ".nef", ".arw", ".orf", ".raf",
     ".dng", ".rw2", ".pef", ".srw", ".3fr", ".mef",
 }
+
+
+def load_all_tags(force=False):
+    _config_dir()
+    if not force and os.path.isfile(TAG_CACHE_PATH):
+        with open(TAG_CACHE_PATH, "r") as f:
+            return json.load(f)
+    try:
+        xml = _run(["exiftool", "-listx"])
+    except RuntimeError:
+        return []
+    tags = re.findall(
+        r"<tag\s+[^>]*name='([^']*)'[^>]*>.*?<desc lang='en'>([^<]*)</desc>",
+        xml, re.DOTALL,
+    )
+    seen = set()
+    result = []
+    for name, desc in tags:
+        if name not in seen:
+            seen.add(name)
+            result.append({"tag": name, "description": desc})
+    result.sort(key=lambda t: t["tag"].lower())
+    with open(TAG_CACHE_PATH, "w") as f:
+        json.dump(result, f)
+    return result
+
+
+def search_tags(query, all_tags, configured_ids):
+    q = query.lower()
+    results = []
+    for t in all_tags:
+        tag = t["tag"]
+        desc = t["description"]
+        if q in tag.lower() or q in desc.lower():
+            results.append(t)
+    return results

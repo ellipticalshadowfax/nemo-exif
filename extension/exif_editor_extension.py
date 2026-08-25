@@ -43,17 +43,17 @@ class ExifEditorExtension(GObject.GObject, Nemo.MenuProvider):
         )
 
     def _is_image(self, nemo_file):
-        uri = nemo_file.get_uri_scheme()
-        if uri and uri.startswith("file://"):
-            mime = nemo_file.get_mime_type() or ""
-            if mime.startswith("image/"):
-                return True
-            ext = os.path.splitext(nemo_file.get_name())[1].lower()
-            if ext in {
-                ".jpg", ".jpeg", ".png", ".tiff", ".tif",
-                ".heic", ".heif", ".webp",
-                ".cr2", ".cr3", ".nef", ".arw", ".orf", ".raf",
-                ".dng", ".rw2", ".pef", ".srw",
-            }:
-                return True
+        if nemo_file.is_directory():
+            return False
+        mime = nemo_file.get_mime_type() or ""
+        if mime.startswith("image/"):
+            return True
+        ext = os.path.splitext(nemo_file.get_name())[1].lower()
+        if ext in {
+            ".jpg", ".jpeg", ".png", ".tiff", ".tif",
+            ".heic", ".heif", ".webp",
+            ".cr2", ".cr3", ".nef", ".arw", ".orf", ".raf",
+            ".dng", ".rw2", ".pef", ".srw",
+        }:
+            return True
         return False
