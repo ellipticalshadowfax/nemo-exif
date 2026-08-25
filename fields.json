@@ -1,0 +1,18 @@
+{
+  "fields": [
+    {"id": "make", "label": "Camera Make", "tag": "Make", "type": "text", "visible": true},
+    {"id": "model", "label": "Camera Model", "tag": "Model", "type": "text", "visible": true},
+    {"id": "lens_make", "label": "Lens Make", "tag": "LensMake", "type": "text", "visible": false},
+    {"id": "lens_model", "label": "Lens Model", "tag": "LensModel", "type": "text", "visible": true},
+    {"id": "focal_length", "label": "Focal Length", "tag": "FocalLength", "type": "number", "visible": true},
+    {"id": "focal_35", "label": "Focal Length (35mm)", "tag": "FocalLengthIn35mmFormat", "type": "number", "visible": false},
+    {"id": "iso", "label": "ISO", "tag": "ISO", "type": "number", "visible": true},
+    {"id": "date_taken", "label": "Date Taken", "tag": "DateTimeOriginal", "type": "date", "visible": true},
+    {"id": "description", "label": "Description", "tag": "ImageDescription", "type": "text", "visible": true},
+    {"id": "artist", "label": "Author", "tag": "Artist", "type": "text", "visible": true},
+    {"id": "copyright", "label": "Copyright", "tag": "Copyright", "type": "text", "visible": true},
+    {"id": "film_type", "label": "Film Type", "tag": "UserComment", "type": "text", "visible": true},
+    {"id": "gps_lat", "label": "Latitude", "tag": "GPSLatitude", "type": "text", "visible": false},
+    {"id": "gps_lon", "label": "Longitude", "tag": "GPSLongitude", "type": "text", "visible": false}
+  ]
+}
