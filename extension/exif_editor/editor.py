@@ -496,7 +496,9 @@ class ExifEditorDialog(Gtk.Dialog):
                 return False
 
         if len(self.filepaths) > 1:
-            self.progress_box.show_all()
+            self.progress_label.show()
+            self.progress_bar.show()
+            self.progress_box.show()
             self.progress_label.set_text(f"Writing 0/{len(self.filepaths)} files\u2026")
             self.progress_bar.set_fraction(0.0)
 
