@@ -1,12 +1,9 @@
-import re
 import gi
 gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
 from gi.repository import Gtk, GLib, Pango, Gdk
 
 from . import exif_lib
-
-DATE_RE = re.compile(r"^\d{4}:\d{2}:\d{2} \d{2}:\d{2}:\d{2}$")
 
 FILM_SEED = [
     "Kentmere 100", "Kentmere 200", "Kentmere 400",
@@ -128,6 +125,117 @@ FILM_CAMERA_TAGS = {
 }
 
 
+class DateTimeWidget(Gtk.Box):
+    """Compact date/time entry fields (YYYY : MM : DD   HH : MM : SS) for EXIF dates.
+
+    Six small text-entry fields with separators keep the row compact.
+    The stored/returned format is ``YYYY:MM:DD HH:MM:SS`` to match exiftool.
+    A fully-empty row is treated as empty (cleared).
+    """
+
+    _FIELDS = [
+        ("year",   4, 1900, 2099, "Year"),
+        ("month",  2,    1,   12, "Mon"),
+        ("day",    2,    1,   31, "Day"),
+        ("hour",   2,    0,   23, "Hr"),
+        ("minute", 2,    0,   59, "Min"),
+        ("second", 2,    0,   59, "Sec"),
+    ]
+
+    def __init__(self):
+        super().__init__(orientation=Gtk.Orientation.HORIZONTAL, spacing=2)
+
+        def _entry(width):
+            e = Gtk.Entry()
+            e.set_width_chars(width)
+            e.set_max_width_chars(width)
+            e.set_max_length(width)
+            e.connect("changed", lambda *_: self._refresh_invalid())
+            return e
+
+        self._entries = []
+        for name, width, _lo, _hi, _label in self._FIELDS:
+            e = _entry(width)
+            setattr(self, f"_{name}", e)
+            self._entries.append(e)
+
+        for i, (name, _width, _lo, _hi, label) in enumerate(self._FIELDS):
+            if i > 0:
+                sep = "  " if i == 3 else ":"
+                sep_lbl = Gtk.Label(label=sep)
+                sep_lbl.get_style_context().add_class("dim-label")
+                self.pack_start(sep_lbl, False, False, 0)
+            vb = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+            vb.pack_start(getattr(self, f"_{name}"), False, False, 0)
+            cap = Gtk.Label(label=label)
+            cap.get_style_context().add_class("dim-label")
+            cap.set_xalign(0.5)
+            vb.pack_start(cap, False, False, 0)
+            self.pack_start(vb, False, False, 0)
+
+    # ------------------------------------------------------------------ #
+    #  Public API                                                          #
+    # ------------------------------------------------------------------ #
+
+    def get_value(self):
+        """Return ``YYYY:MM:DD HH:MM:SS`` or ``""`` when every field is empty."""
+        vals = [e.get_text().strip() for e in self._entries]
+        if all(v == "" for v in vals):
+            return ""
+        return ":".join(vals[:3]) + " " + ":".join(vals[3:])
+
+    def set_value(self, val):
+        """Accept ``YYYY:MM:DD HH:MM:SS`` or empty/None (clears all fields)."""
+        if not val:
+            for e in self._entries:
+                e.set_text("")
+            return
+        try:
+            date_part, time_part = val.strip().split(" ", 1)
+            y, mo, d = date_part.split(":")
+            h, mi, s = time_part.split(":")
+            for e, v in zip(self._entries, (y, mo, d, h, mi, s)):
+                e.set_text(v.strip())
+        except (ValueError, AttributeError):
+            for e in self._entries:
+                e.set_text("")
+
+    def _refresh_invalid(self):
+        for e, (_name, _w, lo, hi, _label) in zip(self._entries, self._FIELDS):
+            ctx = e.get_style_context()
+            if self._field_invalid(e, lo, hi):
+                ctx.add_class("invalid-datetime")
+            else:
+                ctx.remove_class("invalid-datetime")
+
+    def _field_invalid(self, entry, lo, hi):
+        text = entry.get_text().strip()
+        if text == "":
+            return False
+        if not text.isdigit():
+            return True
+        return not (lo <= int(text) <= hi)
+
+    def connect_change(self, callback):
+        for e in self._entries:
+            e.connect("changed", lambda *_: callback())
+
+    def set_invalid(self, invalid: bool):
+        self._refresh_invalid()
+
+    def is_valid(self):
+        """All six fields must be filled with in-range values (or all empty)."""
+        values = [e.get_text().strip() for e in self._entries]
+        if all(v == "" for v in values):
+            return True
+        if any(v == "" for v in values):
+            return False
+        for e, (_name, _w, lo, hi, _label) in zip(self._entries, self._FIELDS):
+            if self._field_invalid(e, lo, hi):
+                return False
+        return True
+
+
 class FieldEditorRow:
     _TAG_SEEDS = {
         "FilmType": FILM_SEED,
@@ -149,8 +257,7 @@ class FieldEditorRow:
 
         ftype = field_def.get("type", "text")
         if ftype == "date":
-            self.entry = Gtk.Entry()
-            self.entry.set_placeholder_text("YYYY:MM:DD HH:MM:SS")
+            self.entry = DateTimeWidget()
         elif ftype == "number":
             self.entry = Gtk.SpinButton.new_with_range(0, 99999, 1)
             self.entry.set_numeric(False)
@@ -183,7 +290,9 @@ class FieldEditorRow:
 
     def set_value(self, val):
         self.original_value = val
-        if isinstance(self.entry, Gtk.SpinButton):
+        if isinstance(self.entry, DateTimeWidget):
+            self.entry.set_value(val)
+        elif isinstance(self.entry, Gtk.SpinButton):
             try:
                 self.entry.set_value(float(val))
             except (ValueError, TypeError):
@@ -193,6 +302,8 @@ class FieldEditorRow:
         self._refresh_indicator()
 
     def get_value(self):
+        if isinstance(self.entry, DateTimeWidget):
+            return self.entry.get_value()
         if isinstance(self.entry, Gtk.SpinButton):
             v = self.entry.get_value()
             return "" if v == 0 else str(v)
@@ -203,25 +314,28 @@ class FieldEditorRow:
 
     def is_valid(self):
         if self.is_date:
-            val = self.get_value()
-            if not val:
-                return True
-            return DATE_RE.match(val) is not None
+            return self.entry.is_valid()
         return True
 
     def _refresh_indicator(self):
-        if self.is_date and not self.is_valid():
-            self.changed_indicator.set_markup("<span color='red'>!</span>")
-            self.entry.set_name("invalid-entry")
+        if self.is_date:
+            invalid = not self.entry.is_valid()
+            self.entry.set_invalid(invalid)
+            if invalid:
+                self.changed_indicator.set_markup("<span color='red'>!</span>")
+                return
         else:
-            self.entry.set_name("")
-            if self.is_changed():
-                self.changed_indicator.set_markup("<span color='blue'>*</span>")
-            else:
-                self.changed_indicator.set_markup("")
+            if isinstance(self.entry, Gtk.Entry):
+                self.entry.set_name("")
+        if self.is_changed():
+            self.changed_indicator.set_markup("<span color='blue'>*</span>")
+        else:
+            self.changed_indicator.set_markup("")
 
     def connect_change(self):
-        if isinstance(self.entry, Gtk.SpinButton):
+        if isinstance(self.entry, DateTimeWidget):
+            self.entry.connect_change(lambda *_: self._refresh_indicator())
+        elif isinstance(self.entry, Gtk.SpinButton):
             self.entry.connect("value-changed", lambda *_: self._refresh_indicator())
         else:
             self.entry.connect("changed", lambda *_: self._refresh_indicator())
@@ -354,7 +468,9 @@ class ExifEditorDialog(Gtk.Dialog):
 
     def _build_ui(self):
         css = Gtk.CssProvider()
-        css.load_from_data(b"#invalid-entry { border: 2px solid red; }")
+        css.load_from_data(
+            b".invalid-datetime { border: 2px solid red; }"
+        )
         Gtk.StyleContext.add_provider_for_screen(
             Gdk.Screen.get_default(),
             css,
@@ -473,11 +589,11 @@ class ExifEditorDialog(Gtk.Dialog):
                 modal=True,
                 message_type=Gtk.MessageType.WARNING,
                 buttons=Gtk.ButtonsType.OK,
-                text="Invalid date format",
+                text="Invalid date value",
             )
             dlg.format_secondary_text(
-                "Date fields must be in YYYY:MM:DD HH:MM:SS format.\n"
-                "Leave empty to clear, or fix the highlighted field(s)."
+                "Month and day must be non-zero.\n"
+                "Set all fields to zero to clear the date, or fix the highlighted field(s)."
             )
             dlg.run()
             dlg.destroy()
